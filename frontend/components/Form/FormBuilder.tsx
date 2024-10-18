@@ -1,13 +1,13 @@
 "use client";
 
 import { FC, useState } from "react";
+import { useMutation } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Separator } from "@/components/ui/separator";
-import { Description } from "@radix-ui/react-dialog";
+import toast from 'react-hot-toast';
 
 type FieldType = "text" | "number" | "email" | "textarea";
 
@@ -19,14 +19,38 @@ interface Field {
 }
 
 interface props {
-    data:any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    data: any
 }
 
-const FormBuilder : FC  <props> = ({data}) => {
+const FormBuilder: FC<props> = ({ data }) => {
     const format = JSON.parse(data?.form_format)
     const [fields, setFields] = useState<Field[]>(format.format);
 
-    // Function to add a new field
+    const saveFormMutation = useMutation({
+        mutationFn: async (updatedFields: Field[]) => {
+            const obj = JSON.stringify({
+                name: "JSConf Feedback",
+                description: "Your feedbacks will help us in organising a better JSConf next time.",
+                format: updatedFields
+            })
+            const res = await fetch(`/api/form/${data["$id"]}`, {
+                method: "PATCH",
+                body: JSON.stringify({ ...data, form_format: obj })
+            })
+            if (!res.ok) {
+                throw new Error('Failed to save form')
+            }
+            return res.json()
+        },
+        onSuccess: () => {
+            toast.success("Form updated successfully");
+        },
+        onError: (error) => {
+            toast.error(`Failed to update form: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    })
+
     const addField = () => {
         const newField: Field = {
             id: Math.random().toString(36).substring(2, 9),
@@ -37,41 +61,29 @@ const FormBuilder : FC  <props> = ({data}) => {
         setFields([...fields, newField]);
     };
 
-    // Function to remove a field
     const removeField = (id: string) => {
         setFields(fields.filter((field) => field.id !== id));
     };
 
-    // Function to update a field's label, type, or value
-    const updateField = (id: string, key: keyof Field, value: string) => {
+    const updateField = (id: string, key: keyof Field, value: string | boolean) => {
         setFields(fields.map((field) => (field.id === id ? { ...field, [key]: value } : field)));
     };
 
-
-    const saveForm = async () => {
-        const obj = JSON.stringify({
-            name :"JSConf Feedback",
-            description:"Your feedbacks will help us in organising a better JSConf next time.",
-            format:fields
-        })
-        const res = await fetch(`/api/form/${data["$id"]}`, {
-            method:"PATCH",
-            body:JSON.stringify({...data, form_format : obj})
-        })
-        const r = await res.json()
-        if(res.status===200){
-            console.log("Done")
-        }else{
-            console.log(r)
-        }
+    const saveForm = () => {
+        saveFormMutation.mutate(fields);
     };
 
     return (
-        <div className="flex flex-col p-5 my-6 bg-secondary/20 border rounded-md shadow-md max-w-[900px]  w-full mx-auto">
+        <div className="flex flex-col p-5 my-6 bg-secondary/20 border rounded-md shadow-md max-w-[900px] w-full mx-auto">
             <div className="flex justify-between">
-
-            <h2 className="text-2xl font-semibold mb-5">Form Builder</h2>
-            <Button onClick={()=>saveForm()} className="bg-primary">Update</Button>
+                <h2 className="text-2xl font-semibold mb-5">Form Builder</h2>
+                <Button 
+                    onClick={saveForm} 
+                    className="bg-primary"
+                    disabled={saveFormMutation.isPending}
+                >
+                    {saveFormMutation.isPending ? 'Updating...' : 'Update'}
+                </Button>
             </div>
             {fields.map((field) => (
                 <div key={field.id} className="flex flex-col mb-4 border p-4 gap-3 rounded-md bg-primary-foreground">
@@ -85,11 +97,10 @@ const FormBuilder : FC  <props> = ({data}) => {
                                 placeholder="Field Label"
                             />
                         </div>
-           
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 items-center">
-                    <div className="flex flex-col gap-3">
+                        <div className="flex flex-col gap-3">
                             <Label className="text-primary font-semibold text-sm">Field Type</Label>
                             <Select
                                 value={field.type}
@@ -124,7 +135,6 @@ const FormBuilder : FC  <props> = ({data}) => {
                                     </label>
                                 </div>
                             </RadioGroup>
-
                         </div>
                     </div>
 
@@ -134,11 +144,7 @@ const FormBuilder : FC  <props> = ({data}) => {
                 </div>
             ))}
 
-            {/* <Separator className="my-5" /> */}
-
-
             <Button onClick={addField} className="bg-primary/50 text-secondary">Add Field</Button>
-
         </div>
     );
 };
